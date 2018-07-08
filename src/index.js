@@ -16,13 +16,15 @@ var config = {
         create: create,
         update: update,
         extend: {
-                    player: null,
-                    reticle: null,
-                    moveKeys: null,
-                    bullets: null,
-                    lastFired: 0,
-                    time: 0,
-                }
+            player: null,
+            reticle: null,
+            moveKeys: null,
+            bullets: null,
+            lastFired: 0,
+            time: 0,
+            fireRate: 100,
+            nextFire: 0
+        }
     }
 };
 
@@ -36,6 +38,7 @@ function preload ()
     ); // Made by tokkatrain: https://tokkatrain.itch.io/top-down-basic-set
     this.load.image('target', 'assets/demoscene/ball.png');
     this.load.image('background', 'assets/skies/underwater1.png');
+    this.load.image('bullet', 'assets/sprites/purple_ball.png');
 }
 
 function create ()
@@ -46,12 +49,29 @@ function create ()
     // Add background, player, and reticle sprites
     var background = this.add.image(800, 600, 'background');
     this.player = this.physics.add.sprite(800, 600, 'player_handgun');
+    this.other = this.physics.add.sprite(400, 300, 'player_handgun');
     this.reticle = this.physics.add.sprite(800, 700, 'target');
 
     // Set image/sprite properties
     background.setOrigin(0.5, 0.5).setDisplaySize(1600, 1200);
     this.player.setOrigin(0.5, 0.5).setDisplaySize(132, 120).setCollideWorldBounds(true).setDrag(500, 500);
+    this.other.setOrigin(0.5, 0.5).setDisplaySize(132, 120).setCollideWorldBounds(true).setDrag(500, 500);
     this.reticle.setOrigin(0.5, 0.5).setDisplaySize(25, 25).setCollideWorldBounds(true);
+
+    //Bullet properties
+    this.bullets = this.add.systems.arcadePhysics.add.group();
+
+    const created = this.bullets.createMultiple({
+        key: 'bullet',
+        active: false,
+        repeat: 49,
+        max: 50,
+    });
+
+    this.physics.add.collider(this.bullets, this.other, (other, bullet) => {
+        bullet.active = false;
+        bullet.disableBody(true, true);
+    });
 
     // Set camera zoom
     this.cameras.main.zoom = 0.5;
@@ -182,6 +202,7 @@ function constrainReticle(reticle, player, radius)
       reticle.x = player.x + (reticle.x-player.x)/scale;
       reticle.y = player.y + (reticle.y-player.y)/scale;
   }
+
 }
 
 function update (time, delta)
@@ -204,4 +225,30 @@ function update (time, delta)
 
     // Constrain position of reticle
     constrainReticle(this.reticle, this.player, 550);
+
+    for (const bullet of this.bullets.children.entries) {
+        bullet.timeLeft -= delta;
+        if (bullet.timeLeft <= 0) {
+            bullet.active = false;
+            bullet.disableBody(true, true);
+        }
+    }
+
+    if (game.input.activePointer.isDown)
+    {
+        fire.call(this);
+    }
+}
+
+function fire() {
+    const now = new Date().getTime();
+    if (now > this.nextFire && this.bullets.countActive(false) > 0) {
+        this.nextFire = now + this.fireRate;
+        var bullet = this.bullets.getFirstDead();
+        bullet.active = true;
+        bullet.timeLeft = 2000;
+        bullet.setMass(0);
+        bullet.enableBody(true, this.player.x - 8, this.player.y - 8, true, true);
+        this.physics.systems.arcadePhysics.moveToObject(bullet, this.reticle, 1000);
+    }
 }
